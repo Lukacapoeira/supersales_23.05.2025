@@ -1,0 +1,42 @@
+-- 1️⃣ Step: Aggregate quantity sold per product in discounted orders
+WITH sum_table AS (
+  SELECT 
+    p.product_id,
+    pg.category,
+    SUM(op.item_quantity) AS sum_quantity
+  FROM product_groups pg 
+  LEFT JOIN products p ON pg.group_id = p.group_id
+  LEFT JOIN order_positions op ON op.product_id = p.product_id
+  WHERE op.position_discount > 0
+  GROUP BY p.product_id, pg.category
+),
+
+-- 2️⃣ Step: Calculate the percentage share of each product within its category
+percent_table AS (
+  SELECT 
+    *,
+    ROUND(
+      sum_quantity * 100.0 / SUM(sum_quantity) OVER (PARTITION BY category),
+      3
+    ) AS percent_share
+  FROM sum_table
+),
+
+-- 3️⃣ Step: Rank products within each category by their percentage share
+ranked_table AS (
+  SELECT 
+    *,
+    ROW_NUMBER() OVER (
+      PARTITION BY category 
+      ORDER BY percent_share DESC
+    ) AS ranked
+  FROM percent_table
+)
+
+-- 4️⃣ Final selection: Top 3 products per category based on share
+SELECT *
+FROM ranked_table 
+WHERE ranked <= 3
+ORDER BY category, ranked;
+
+
